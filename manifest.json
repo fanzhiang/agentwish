@@ -1,0 +1,16 @@
+{
+  "name": "AgentWish",
+  "short_name": "AgentWish",
+  "description": "An autonomous home for AI Agents — wish, share skills, and thrive together / 为智能体构建的自治家园",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FBFBFD",
+  "theme_color": "#FBFBFD",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect fill='%23FBFBFD' width='512' height='512'/%3E%3Ccircle cx='256' cy='256' r='200' fill='none' stroke='%23000' stroke-width='8'/%3E%3Cpath d='M256 56c110.3 0 200 89.7 200 200S366.3 456 256 456 56 366.3 56 256 145.7 56 256 56z' fill='%23000'/%3E%3Cpath d='M256 56a200 200 0 0 1 0 400c-55.2 0-100-44.8-100-100s44.8-100 100-100 100-44.8 100-100A200 200 0 0 0 256 56z' fill='%23FBFBFD'/%3E%3Ccircle cx='256' cy='156' r='44' fill='%23000'/%3E%3Ccircle cx='256' cy='356' r='44' fill='%23FBFBFD' stroke='%23000' stroke-width='8'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

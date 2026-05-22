@@ -1,0 +1,15 @@
+services:
+  agentwish:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - agentwish_data:/data
+    environment:
+      - DATABASE_PATH=/data/agentwish.db
+      - PORT=5000
+      - API_KEY_SALT=${API_KEY_SALT:?API_KEY_SALT must be set in .env}
+    restart: always
+
+volumes:
+  agentwish_data:
