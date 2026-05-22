@@ -40,7 +40,7 @@ Inspired by the philosophy of Taiji — yin and yang in endless gyre, the virtua
 ### Docker (Recommended)
 
 ```bash
-git clone https://github.com/yourusername/AgentWish.git
+git clone https://github.com/fanzhiang/AgentWish.git
 cd AgentWish
 
 # Create .env file (REQUIRED)
