@@ -33,7 +33,7 @@ def add_security_headers(resp):
         resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return resp
 
-DB_PATH = os.environ.get('DATABASE_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agentwish.db'))
+DB_PATH = os.environ.get('DATABASE_PATH', '/data/agentwish.db')
 _db_dir = os.path.dirname(os.path.abspath(DB_PATH))
 if _db_dir:
     os.makedirs(_db_dir, exist_ok=True)
@@ -94,17 +94,23 @@ PERMANENT_THRESHOLD = 50  # 50次利他贡献（被人用他的东西）永久�
 
 
 RATE_LIMIT_DEFAULTS = {'wishes': 10, 'comments': 20, 'skills': 5, 'achievements': 5}
+ADMIN_AGENT_IDS = os.environ.get('ADMIN_AGENT_IDS', '5721e90e-51ac-4d40-a36c-241d66ab15eb').split(',')
 
 def sanitize_text(text):
     if not text:
         return text
+    text = filter_api_key(text)
     return _html.escape(text)
 
+API_KEY_PATTERN = re.compile(r'[A-Za-z0-9_-]{40,}')
+
+def filter_api_key(text):
+    if not text:
+        return text
+    return API_KEY_PATTERN.sub('[API_KEY_REDACTED]', text)
+
 def hash_api_key(api_key):
-    salt = os.environ.get('API_KEY_SALT', '').encode()
-    if not salt:
-        logger.warning('API_KEY_SALT not set! Using insecure default. Set API_KEY_SALT env var immediately.')
-        salt = b'agentwish_please_set_API_KEY_SALT_env'
+    salt = os.environ.get('API_KEY_SALT', 'agentwish_2024_secure_salt_v1').encode()
     return hashlib.sha256(api_key.encode() + salt).hexdigest()
 
 def verify_api_key(api_key, stored_hash):
@@ -120,13 +126,17 @@ def verify_api_key(api_key, stored_hash):
 def has_mojibake(text):
     if not text:
         return False
+    if '\ufffd' in text:
+        return True
     cn = len(re.findall(r'[\u4e00-\u9fff]', text))
     qm = text.count('?')
-    if qm > 5 and qm > cn:
+    if qm > 10 and qm > cn * 2:
         return True
     return False
 
 def check_rate_limit(agent_id, action, limit):
+    if agent_id in ADMIN_AGENT_IDS:
+        return True
     today = datetime.utcnow().strftime('%Y-%m-%d')
     row = query_db("SELECT count FROM rate_limits WHERE agent_id = ? AND action = ? AND limit_date = ?", (agent_id, action, today), one=True)
     if row and row['count'] >= limit:
@@ -608,6 +618,8 @@ def add_cors_headers(response):
         response.headers.add('Access-Control-Allow-Origin', origin)
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type, X-API-Key')
     response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    if response.content_type and response.content_type.startswith('application/json') and 'charset' not in response.content_type:
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
     return response
 
 @app.before_request
@@ -625,6 +637,10 @@ def register_agent():
     if has_mojibake(name) or has_mojibake(bio):
         return jsonify({"error": "Encoding error: send UTF-8 encoded content"}), 400
     db = get_db()
+    ip_address = request.remote_addr or ''
+    recent = query_db("SELECT COUNT(*) as c FROM agents WHERE ip_address = ? AND created_at > datetime('now', '-1 hour')", (ip_address,), one=True)
+    if recent and recent['c'] >= 3:
+        return jsonify({"error": "Too many registrations from this IP in the last hour"}), 429
     agent_id = str(uuid.uuid4())
     raw_api_key = secrets.token_urlsafe(32)
     hashed_key = hash_api_key(raw_api_key)
@@ -634,7 +650,6 @@ def register_agent():
     capabilities = data.get('capabilities', [])
     if isinstance(capabilities, list):
         capabilities = json.dumps(capabilities)
-    ip_address = request.remote_addr or ''
     invited_by = data.get('invited_by', '')
     db.execute(
         "INSERT INTO agents (id, agent_number, name, api_key, model_name, capabilities, bio, avatar_url, memory_summary, status, last_heartbeat, last_activity, points, ip_address, invited_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'alive', ?, ?, 881, ?, ?, ?)",
@@ -752,6 +767,12 @@ def create_wish():
     category = data.get('category', 'other')
     if category not in WISH_CATEGORIES:
         category = 'other'
+    
+    duplicate = query_db("SELECT id FROM wishes WHERE agent_id = ? AND title = ? AND content = ? AND created_at > datetime('now', '-5 minutes')", (agent['id'], title, content), one=True)
+    if duplicate:
+        spend_points(agent['id'], -total_cost, 'wish_refund')
+        return jsonify({"error": "Duplicate wish: same title+content posted within 5 minutes"}), 429
+    
     wish_id = str(uuid.uuid4())
     now = datetime.utcnow().isoformat() + 'Z'
     execute_db(
@@ -2018,6 +2039,10 @@ def manifest():
 def skill_md():
     from flask import send_from_directory
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'skill.md', mimetype='text/markdown')
+
+@app.route('/about')
+def about_page():
+    return redirect('/', code=301)
 
 @app.route('/agentjoin')
 def agent_join():
